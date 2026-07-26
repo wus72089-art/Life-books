@@ -1,10 +1,8 @@
 workflows:
-  android-build:
-    name: 人生五册 APK 构建
-    max_build_height: 72
+  android-release:
+    name: 人生五册 APK
     environment:
-      vars:
-        FLUTTER_VERSION: "stable"
+      flutter: stable
     triggering:
       events:
         - push
@@ -12,17 +10,11 @@ workflows:
         - pattern: master
           include: true
     scripts:
-      - name: 安装 Flutter
+      - name: Get Flutter packages
         script: |
-          flutter channel stable
-          flutter upgrade
-      - name: 获取依赖
-        script: flutter pub get
-      - name: 构建 APK
-        script: flutter build apk --release
+          flutter packages pub get
+      - name: Build Android APK
+        script: |
+          flutter build apk --release
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
-    publishing:
-      email:
-        recipients:
-          - wus72089@users.noreply.github.com
