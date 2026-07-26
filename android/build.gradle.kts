@@ -17,11 +17,6 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
-    pluginManager.withPlugin("com.android.library") {
-        extensions.configure<com.android.build.gradle.LibraryExtension>("android") {
-            compileSdk = 36
-        }
-    }
 }
 
 tasks.register<Delete>("clean") {
