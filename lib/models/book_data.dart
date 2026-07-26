@@ -30,7 +30,7 @@ const List<BookInfo> allBooks = [
     icon: '👨‍👩‍👧',
     desc: '记录亲情与家庭故事',
     features: [
-      FeatureInfo(title: '家庭档案', icon: '📋', desc: '家庭成员信息与重要记录'),
+      FeatureInfo(title: '家庭档案', icon: '📋', desc: '管理家庭成员信息'),
       FeatureInfo(title: '家庭日记', icon: '📔', desc: '记录每一天家庭故事'),
       FeatureInfo(title: '家庭照片', icon: '📸', desc: '珍藏家庭美好瞬间'),
     ],
@@ -41,7 +41,7 @@ const List<BookInfo> allBooks = [
     desc: '收藏知识与成长记录',
     features: [
       FeatureInfo(title: '读书记录', icon: '📖', desc: '读书笔记与心得'),
-      FeatureInfo(title: '知识库', icon: '🧠', desc: '知识整理与收藏'),
+      FeatureInfo(title: '知识库', icon: '🧠', desc: '上传图书、管理阅读进度'),
       FeatureInfo(title: '学习成长', icon: '🌱', desc: '学习轨迹与成长记录'),
     ],
   ),
@@ -66,7 +66,7 @@ const List<BookInfo> allBooks = [
     ],
   ),
   BookInfo(
-    title: '人生三鉴',
+    title: '人生三见',
     icon: '🌏',
     desc: '见天地、见众生、见自己',
     features: [

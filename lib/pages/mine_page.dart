@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 import '../services/repository.dart';
 import 'settings_page.dart';
+import 'statistics_page.dart';
+import 'achievements_page.dart';
+import 'annual_report_page.dart';
+import 'social_media_page.dart';
+import 'reminder_settings_page.dart';
+import 'theme_settings_page.dart';
+import 'privacy_settings_page.dart';
+import 'backup_page.dart';
+import 'export_page.dart';
 
 class MinePage extends StatelessWidget {
   const MinePage({super.key});
@@ -120,7 +129,7 @@ class MinePage extends StatelessWidget {
                         _ProfileStat(value: '${counts['learning'] ?? 0}', label: '学习'),
                         _ProfileStat(value: '${counts['life'] ?? 0}', label: '生活'),
                         _ProfileStat(value: '${counts['work'] ?? 0}', label: '工作'),
-                        _ProfileStat(value: '${counts['three_views'] ?? 0}', label: '三鉴'),
+                        _ProfileStat(value: '${counts['three_views'] ?? 0}', label: '三见'),
                       ],
                     ),
                     if (pendingSync > 0) ...[
@@ -208,19 +217,48 @@ class MinePage extends StatelessWidget {
   }
 
   void _handleMenuTap(BuildContext context, String title) {
+    Widget? page;
     switch (title) {
-      case '数据备份':
-      case '导出与分享':
+      case '数据统计':
+        page = const StatisticsPage();
+        break;
+      case '成就勋章':
+        page = const AchievementsPage();
+        break;
+      case '年度报告':
+        page = const AnnualReportPage();
+        break;
+      case '自媒体账号管理':
+        page = const SocialMediaPage();
+        break;
+      case '提醒设置':
+        page = const ReminderSettingsPage();
+        break;
+      case '主题与外观':
+        page = const ThemeSettingsPage();
+        break;
       case '隐私设置':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
+        page = const PrivacySettingsPage();
+        break;
+      case '数据备份':
+        page = const BackupPage();
+        break;
+      case '导出与分享':
+        page = const ExportPage();
         break;
       default:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$title 功能开发中...'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        break;
+    }
+
+    if (page != null) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => page!));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$title 功能开发中...'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 }

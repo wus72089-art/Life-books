@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 import 'local_database.dart';
 import 'firebase_service.dart';
@@ -226,6 +227,41 @@ class DataRepository {
 
   /// 待同步数量
   int get pendingSyncCount => _db.getPendingSyncItems().length;
+
+  // ============ 备份与导出 ============
+
+  /// 导出所有数据为 Map
+  Map<String, dynamic> exportAllData() {
+    final result = <String, dynamic>{
+      'exportTime': DateTime.now().toIso8601String(),
+      'totalRecords': totalRecords,
+    };
+    final bookTypes = ['family', 'learning', 'life', 'work', 'three_views'];
+    for (final type in bookTypes) {
+      result[type] = _db.getAllRecords(type);
+    }
+    return result;
+  }
+
+  /// 获取最后备份时间
+  String? getLastBackupTime() {
+    try {
+      final box = Hive.box<String>('settings');
+      return box.get('last_backup_time');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 设置最后备份时间
+  Future<void> setLastBackupTime(String time) async {
+    try {
+      final box = Hive.box<String>('settings');
+      await box.put('last_backup_time', time);
+    } catch (_) {
+      // 忽略
+    }
+  }
 }
 
 /// 同步结果

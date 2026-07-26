@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/repository.dart';
 import 'add_record_page.dart';
+import 'record_detail_page.dart';
 
 class RecordPage extends StatefulWidget {
   const RecordPage({super.key});
@@ -56,9 +58,26 @@ class _RecordPageState extends State<RecordPage> {
     return _allRecords.where((r) => r['_bookType'] == bookType).toList();
   }
 
+  /// 查找"那年今日"记录
+  List<Map<String, dynamic>> get _todayInHistory {
+    final now = DateTime.now();
+    final todayMonth = now.month;
+    final todayDay = now.day;
+    final thisYear = now.year;
+
+    return _allRecords.where((r) {
+      final timeStr = (r['createTime'] as String?) ?? '';
+      if (timeStr.length < 10) return false;
+      final dt = DateTime.tryParse(timeStr.substring(0, 10));
+      if (dt == null) return false;
+      return dt.month == todayMonth && dt.day == todayDay && dt.year != thisYear;
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final records = _filteredRecords;
+    final todayHistory = _todayInHistory;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F4EC),
@@ -161,6 +180,12 @@ class _RecordPageState extends State<RecordPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // ===== 那年今日横幅 =====
+                  if (todayHistory.isNotEmpty)
+                    _buildTodayInHistoryCard(todayHistory),
+
+                  // 记录计数
                   Text(
                     '${_selectedFilter == -1 ? '全部' : _filters[_selectedFilter].label}记录 (${records.length})',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF5C4033)),
@@ -197,7 +222,19 @@ class _RecordPageState extends State<RecordPage> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final record = records[index];
-                    return _RecordCard(record: record, onDelete: _loadAllRecords);
+                    return _RecordCard(
+                      record: record,
+                      onDelete: _loadAllRecords,
+                      onTap: () {
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => RecordDetailPage(
+                            record: record,
+                            bookType: record['_bookType'] ?? '',
+                            bookTitle: record['_label'] ?? '记录',
+                          ),
+                        )).then((_) => _loadAllRecords());
+                      },
+                    );
                   },
                   childCount: records.length,
                 ),
@@ -206,10 +243,338 @@ class _RecordPageState extends State<RecordPage> {
           const SliverToBoxAdapter(child: SizedBox(height: 20)),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF5C4033),
-        onPressed: _showAddOptions,
-        child: const Icon(Icons.add, color: Colors.white),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // 快速记一笔按钮
+          FloatingActionButton.small(
+            heroTag: 'quick_record',
+            backgroundColor: Colors.white,
+            onPressed: _showQuickRecord,
+            child: const Icon(Icons.flash_on_rounded, color: Color(0xFF5C4033)),
+          ),
+          const SizedBox(height: 12),
+          // 选册子添加按钮
+          FloatingActionButton(
+            heroTag: 'add_record',
+            backgroundColor: const Color(0xFF5C4033),
+            onPressed: _showAddOptions,
+            child: const Icon(Icons.add, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 构建"那年今日"卡片
+  Widget _buildTodayInHistoryCard(List<Map<String, dynamic>> records) {
+    return GestureDetector(
+      onTap: () {
+        // 点击展开查看所有那年今日记录
+        _showTodayInHistoryDialog(records);
+      },
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFF5C4033),
+              Color(0xFF8B6914),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF5C4033).withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '📅 去年今日',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...records.take(2).map((r) {
+              final title = (r['title'] ?? '无标题') as String;
+              final content = (r['content'] ?? '') as String;
+              final time = (r['createTime'] ?? '').toString();
+              final year = time.length >= 4 ? time.substring(0, 4) : '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    if (year.isNotEmpty) ...[
+                      Text(
+                        '$year年  ',
+                        style: const TextStyle(fontSize: 12, color: Colors.white54),
+                      ),
+                    ],
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            if (records.length > 2)
+              Text(
+                '还有 ${records.length - 2} 条记录...',
+                style: const TextStyle(fontSize: 11, color: Colors.white54),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 显示那年今日详情弹窗
+  void _showTodayInHistoryDialog(List<Map<String, dynamic>> records) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.8,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8F4EC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '📅 那年今日',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF5C4033)),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: records.length,
+                  itemBuilder: (context, index) {
+                    final r = records[index];
+                    final title = (r['title'] ?? '无标题') as String;
+                    final content = (r['content'] ?? '') as String;
+                    final time = (r['createTime'] ?? '').toString();
+                    final year = time.length >= 4 ? time.substring(0, 4) : '';
+                    return Card(
+                      color: Colors.white,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: ListTile(
+                        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (year.isNotEmpty) Text('$year年', style: const TextStyle(fontSize: 12, color: Color(0xFF5C4033))),
+                            if (content.isNotEmpty)
+                              Text(
+                                content.length > 80 ? '${content.substring(0, 80)}...' : content,
+                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                              ),
+                          ],
+                        ),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => RecordDetailPage(
+                              record: r,
+                              bookType: r['_bookType'] ?? '',
+                              bookTitle: r['_label'] ?? '记录',
+                            ),
+                          )).then((_) => _loadAllRecords());
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 快速记录弹窗
+  void _showQuickRecord() {
+    final titleController = TextEditingController();
+    final contentController = TextEditingController();
+    final picker = ImagePicker();
+    String? imagePath;
+    bool isPicking = false;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: EdgeInsets.only(
+            left: 24, right: 24, top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text('⚡ 快速记一笔', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  hintText: '标题...',
+                  filled: true,
+                  fillColor: const Color(0xFFF8F4EC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: contentController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: '此刻在想什么...',
+                  filled: true,
+                  fillColor: const Color(0xFFF8F4EC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(16),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  // 拍照按钮
+                  OutlinedButton.icon(
+                    onPressed: isPicking ? null : () async {
+                      setModalState(() => isPicking = true);
+                      try {
+                        final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+                        if (file != null) {
+                          setModalState(() => imagePath = file.path);
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('拍照失败: $e')),
+                          );
+                        }
+                      } finally {
+                        if (context.mounted) setModalState(() => isPicking = false);
+                      }
+                    },
+                    icon: const Icon(Icons.camera_alt, size: 18),
+                    label: Text(imagePath != null ? '已拍照 ✓' : '拍照'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF5C4033),
+                      side: const BorderSide(color: Color(0xFF5C4033)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const Spacer(),
+                  // 保存到生活册
+                  ElevatedButton(
+                    onPressed: () async {
+                      final title = titleController.text.trim();
+                      final content = contentController.text.trim();
+                      if (title.isEmpty || content.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('请填写标题和内容')),
+                        );
+                        return;
+                      }
+                      try {
+                        await DataRepository().addRecord('life', {
+                          'title': title,
+                          'content': content,
+                          'subType': 'daily',
+                          'tags': [],
+                          'imagePaths': imagePath != null ? [imagePath!] : [],
+                          'attachments': [],
+                          'isFavorite': false,
+                        });
+                        if (context.mounted) {
+                          Navigator.pop(ctx);
+                          _loadAllRecords();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('记录成功 ✓'),
+                              backgroundColor: const Color(0xFF4CAF50),
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('保存失败: $e')),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF5C4033),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('保存到生活册'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -271,7 +636,8 @@ class _FilterType {
 class _RecordCard extends StatelessWidget {
   final Map<String, dynamic> record;
   final VoidCallback? onDelete;
-  const _RecordCard({required this.record, this.onDelete});
+  final VoidCallback? onTap;
+  const _RecordCard({required this.record, this.onDelete, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -319,71 +685,74 @@ class _RecordCard extends StatelessWidget {
         }
         onDelete?.call();
       },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(icon, style: const TextStyle(fontSize: 20)),
-                const SizedBox(width: 8),
-                Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-                Text(date, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-              ],
-            ),
-            if (content.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                content.length > 120 ? '${content.substring(0, 120)}...' : content,
-                style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.5),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(icon, style: const TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+                  Text(date, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                ],
               ),
-            ],
-            if (imagePaths.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 90,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: imagePaths.length,
-                  itemBuilder: (ctx, idx) {
-                    final path = imagePaths[idx] as String;
-                    return Container(
-                      width: 90,
-                      height: 90,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        image: DecorationImage(
-                          image: FileImage(File(path)),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    );
-                  },
+              if (content.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  content.length > 120 ? '${content.substring(0, 120)}...' : content,
+                  style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.5),
                 ),
-              ),
-            ],
-            if (tags.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                children: tags.map((tag) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF5C4033).withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
+              ],
+              if (imagePaths.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 90,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: imagePaths.length,
+                    itemBuilder: (ctx, idx) {
+                      final path = imagePaths[idx] as String;
+                      return Container(
+                        width: 90,
+                        height: 90,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          image: DecorationImage(
+                            image: FileImage(File(path)),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  child: Text('#$tag', style: const TextStyle(fontSize: 12, color: Color(0xFF5C4033))),
-                )).toList(),
-              ),
+                ),
+              ],
+              if (tags.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  children: tags.map((tag) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF5C4033).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text('#$tag', style: const TextStyle(fontSize: 12, color: Color(0xFF5C4033))),
+                  )).toList(),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

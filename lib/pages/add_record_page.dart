@@ -3,16 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/repository.dart';
 
-/// 通用新增记录页面
-/// 支持文字输入、分类选择、标签添加
+/// 通用记录页面 — 支持新建与编辑
+/// 支持文字输入、分类选择、标签添加、图片上传
 class AddRecordPage extends StatefulWidget {
   final String bookType;
   final String bookTitle;
+  final Map<String, dynamic>? existingRecord;
 
   const AddRecordPage({
     super.key,
     required this.bookType,
     required this.bookTitle,
+    this.existingRecord,
   });
 
   @override
@@ -69,8 +71,31 @@ class _AddRecordPageState extends State<AddRecordPage> {
   @override
   void initState() {
     super.initState();
+    // 默认选中第一个分类
     if (_currentSubTypes.isNotEmpty) {
       _selectedSubType = _currentSubTypes[0]['value']!;
+    }
+
+    // 编辑模式：用已有数据填充
+    if (widget.existingRecord != null) {
+      final r = widget.existingRecord!;
+      _titleController.text = (r['title'] ?? '') as String;
+      _contentController.text = (r['content'] ?? '') as String;
+
+      final savedSubType = (r['subType'] ?? '') as String;
+      if (savedSubType.isNotEmpty && _currentSubTypes.any((st) => st['value'] == savedSubType)) {
+        _selectedSubType = savedSubType;
+      }
+
+      final savedTags = r['tags'] as List<dynamic>?;
+      if (savedTags != null) {
+        _tags.addAll(savedTags.map((e) => e.toString()));
+      }
+
+      final savedImages = r['imagePaths'] as List<dynamic>?;
+      if (savedImages != null) {
+        _imagePaths.addAll(savedImages.map((e) => e.toString()));
+      }
     }
   }
 
@@ -179,19 +204,41 @@ class _AddRecordPageState extends State<AddRecordPage> {
 
     try {
       final repo = DataRepository();
-      await repo.addRecord(widget.bookType, {
-        'title': title,
-        'content': content,
-        'subType': _selectedSubType,
-        'tags': _tags,
-        'imagePaths': _imagePaths,
-        'attachments': [],
-        'isFavorite': false,
-      });
+      final isEditing = widget.existingRecord != null;
 
-      if (mounted) {
-        _showSnack('保存成功 ✓', isSuccess: true);
-        Navigator.of(context).pop(true);
+      if (isEditing) {
+        // 编辑模式
+        final id = widget.existingRecord!['id'] as String;
+        await repo.updateRecord(widget.bookType, id, {
+          'title': title,
+          'content': content,
+          'subType': _selectedSubType,
+          'tags': _tags,
+          'imagePaths': _imagePaths,
+          'attachments': widget.existingRecord!['attachments'] ?? [],
+          'isFavorite': widget.existingRecord!['isFavorite'] ?? false,
+        });
+
+        if (mounted) {
+          _showSnack('更新成功 ✓', isSuccess: true);
+          Navigator.of(context).pop(true);
+        }
+      } else {
+        // 新建模式
+        await repo.addRecord(widget.bookType, {
+          'title': title,
+          'content': content,
+          'subType': _selectedSubType,
+          'tags': _tags,
+          'imagePaths': _imagePaths,
+          'attachments': [],
+          'isFavorite': false,
+        });
+
+        if (mounted) {
+          _showSnack('保存成功 ✓', isSuccess: true);
+          Navigator.of(context).pop(true);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -219,10 +266,12 @@ class _AddRecordPageState extends State<AddRecordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.existingRecord != null;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F4EC),
       appBar: AppBar(
-        title: Text('新建${widget.bookTitle}记录'),
+        title: Text(isEditing ? '编辑记录' : '新建${widget.bookTitle}记录'),
         actions: [
           TextButton.icon(
             onPressed: _isSaving ? null : _saveRecord,
@@ -471,9 +520,9 @@ class _AddRecordPageState extends State<AddRecordPage> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
-                        '保存记录',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    : Text(
+                        isEditing ? '保存修改' : '保存记录',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
               ),
             ),
