@@ -1,7 +1,7 @@
 name: life_books
 description: "人生五册 - 个人数字生命工作台"
 publish_to: 'none'
-version: 4.0.0+4
+version: 4.1.0+5
 
 environment:
   sdk: '>=3.5.0 <4.0.0'

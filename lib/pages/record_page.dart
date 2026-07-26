@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/repository.dart';
 import 'add_record_page.dart';
@@ -196,7 +197,7 @@ class _RecordPageState extends State<RecordPage> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final record = records[index];
-                    return _RecordCard(record: record);
+                    return _RecordCard(record: record, onDelete: _loadAllRecords);
                   },
                   childCount: records.length,
                 ),
@@ -269,57 +270,121 @@ class _FilterType {
 
 class _RecordCard extends StatelessWidget {
   final Map<String, dynamic> record;
-  const _RecordCard({required this.record});
+  final VoidCallback? onDelete;
+  const _RecordCard({required this.record, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    final icon = record['_icon'] ?? '📝';
+    final icon = record['_icon'] ?? '';
     final title = record['title'] ?? '无标题';
     final content = record['content'] ?? '';
     final tags = (record['tags'] as List<dynamic>?) ?? [];
+    final imagePaths = (record['imagePaths'] as List<dynamic>?) ?? [];
+    final bookType = record['_bookType'] ?? '';
     final time = (record['createTime'] ?? '').toString();
     final date = time.length >= 16 ? '${time.substring(5, 10)} ${time.substring(11, 16)}' : time;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+    return Dismissible(
+      key: Key('record_${record['id'] ?? '$title$date'}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE57373),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(icon, style: const TextStyle(fontSize: 20)),
-              const SizedBox(width: 8),
-              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-              Text(date, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+      confirmDismiss: (direction) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('确认删除'),
+            content: Text('确定要删除「$title」吗？'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('删除', style: TextStyle(color: Color(0xFFE57373))),
+              ),
             ],
           ),
-          if (content.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              content.length > 120 ? '${content.substring(0, 120)}...' : content,
-              style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.5),
+        ) ?? false;
+      },
+      onDismissed: (_) async {
+        if (bookType.isNotEmpty && record['id'] != null) {
+          await DataRepository().deleteRecord(bookType, record['id'] as String);
+        }
+        onDelete?.call();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(icon, style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 8),
+                Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+                Text(date, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              ],
             ),
-          ],
-          if (tags.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              children: tags.map((tag) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF5C4033).withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
+            if (content.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                content.length > 120 ? '${content.substring(0, 120)}...' : content,
+                style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.5),
+              ),
+            ],
+            if (imagePaths.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 90,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: imagePaths.length,
+                  itemBuilder: (ctx, idx) {
+                    final path = imagePaths[idx] as String;
+                    return Container(
+                      width: 90,
+                      height: 90,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        image: DecorationImage(
+                          image: FileImage(File(path)),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                child: Text('#$tag', style: const TextStyle(fontSize: 12, color: Color(0xFF5C4033))),
-              )).toList(),
-            ),
+              ),
+            ],
+            if (tags.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                children: tags.map((tag) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5C4033).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('#$tag', style: const TextStyle(fontSize: 12, color: Color(0xFF5C4033))),
+                )).toList(),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

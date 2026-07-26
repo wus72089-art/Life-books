@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/repository.dart';
 
 /// 通用新增记录页面
@@ -21,9 +23,12 @@ class _AddRecordPageState extends State<AddRecordPage> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
   final _tagsController = TextEditingController();
+  final _picker = ImagePicker();
   String _selectedSubType = '';
   final List<String> _tags = [];
+  final List<String> _imagePaths = []; // 本地图片路径
   bool _isSaving = false;
+  bool _isPicking = false;
 
   // 各册子类型对应的子分类
   static const Map<String, List<Map<String, String>>> _subTypes = {
@@ -91,6 +96,72 @@ class _AddRecordPageState extends State<AddRecordPage> {
     setState(() => _tags.remove(tag));
   }
 
+  Future<void> _pickImage() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('选择图片来源', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Color(0xFF5C4033)),
+                title: const Text('从相册选择'),
+                onTap: () { Navigator.pop(ctx); _pickFromGallery(); },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Color(0xFF5C4033)),
+                title: const Text('拍照'),
+                onTap: () { Navigator.pop(ctx); _pickFromCamera(); },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFromGallery() async {
+    setState(() => _isPicking = true);
+    try {
+      final files = await _picker.pickMultiImage(imageQuality: 80, maxWidth: 1920, maxHeight: 1920);
+      if (files != null && files.isNotEmpty) {
+        setState(() => _imagePaths.addAll(files.map((f) => f.path)));
+      }
+    } catch (e) {
+      if (mounted) _showSnack('选择图片失败: $e');
+    } finally {
+      if (mounted) setState(() => _isPicking = false);
+    }
+  }
+
+  Future<void> _pickFromCamera() async {
+    setState(() => _isPicking = true);
+    try {
+      final file = await _picker.pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 1920, maxHeight: 1920);
+      if (file != null) {
+        setState(() => _imagePaths.add(file.path));
+      }
+    } catch (e) {
+      if (mounted) _showSnack('拍照失败: $e');
+    } finally {
+      if (mounted) setState(() => _isPicking = false);
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() => _imagePaths.removeAt(index));
+  }
+
   Future<void> _saveRecord() async {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
@@ -113,6 +184,7 @@ class _AddRecordPageState extends State<AddRecordPage> {
         'content': content,
         'subType': _selectedSubType,
         'tags': _tags,
+        'imagePaths': _imagePaths,
         'attachments': [],
         'isFavorite': false,
       });
@@ -234,6 +306,99 @@ class _AddRecordPageState extends State<AddRecordPage> {
               ),
               style: const TextStyle(fontSize: 15, height: 1.5),
             ),
+            const SizedBox(height: 16),
+
+            // 图片上传
+            Row(
+              children: [
+                _buildLabel('图片'),
+                const SizedBox(width: 8),
+                if (_imagePaths.isNotEmpty)
+                  Text('(${_imagePaths.length})', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_imagePaths.isEmpty)
+              GestureDetector(
+                onTap: _isPicking ? null : _pickImage,
+                child: Container(
+                  width: double.infinity,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                  ),
+                  child: _isPicking
+                      ? const Center(child: CircularProgressIndicator())
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_photo_alternate, size: 36, color: Colors.grey[400]),
+                            const SizedBox(height: 8),
+                            Text('点击添加图片', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+                          ],
+                        ),
+                ),
+              ),
+            if (_imagePaths.isNotEmpty) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  // 添加更多按钮
+                  GestureDetector(
+                    onTap: _isPicking ? null : _pickImage,
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                      ),
+                      child: _isPicking
+                          ? const Center(child: CircularProgressIndicator())
+                          : const Icon(Icons.add_photo_alternate, size: 28, color: Color(0xFF5C4033)),
+                    ),
+                  ),
+                  // 已选图片缩略图
+                  ..._imagePaths.asMap().entries.map((entry) {
+                    return Stack(
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            image: DecorationImage(
+                              image: FileImage(File(entry.value)),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: -4,
+                          top: -4,
+                          child: GestureDetector(
+                            onTap: () => _removeImage(entry.key),
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE57373),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close, size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
+              ),
+            ],
             const SizedBox(height: 20),
 
             // 标签
