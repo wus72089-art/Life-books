@@ -115,7 +115,13 @@ class _TimelinePageState extends State<TimelinePage> {
                     }
                     return const SizedBox();
                   },
-                  childCount: _groups.fold(0, (sum, g) => sum + 1 + g.records.length),
+                  childCount: () {
+                    int count = 0;
+                    for (final g in _groups) {
+                      count += 1 + g.records.length;
+                    }
+                    return count;
+                  }(),
                 ),
               ),
             ),
