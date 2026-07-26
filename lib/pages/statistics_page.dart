@@ -187,6 +187,7 @@ class StatisticsPage extends StatelessWidget {
                         Text('${entry.value}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _warmBrown)),
                         const SizedBox(height: 4),
                         AnimatedContainer(
+                          duration: const Duration(milliseconds: 500),
                           height: ratio * 100,
                           decoration: BoxDecoration(
                             color: _bookColors[idx % _bookColors.length],

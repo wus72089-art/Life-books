@@ -118,7 +118,7 @@ class AnnualReportPage extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _miniStat('最活跃月份', _monthLabels[maxMonthIdx]),
-                    _miniStat('最活跃册子', mostActiveBook != null ? (_bookNames[mostActiveBook] ?? mostActiveBook) : '-'),
+                    _miniStat('最活跃册子', mostActiveBook != null ? (_bookNames[mostActiveBook!] ?? mostActiveBook!) : '-'),
                   ],
                 ),
               ],

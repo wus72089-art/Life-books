@@ -61,8 +61,11 @@ class _SocialMediaPageState extends State<SocialMediaPage> {
         itemCount: _platforms.length,
         itemBuilder: (context, index) {
           final p = _platforms[index];
-          final accounts = _getAccounts(p['name']!);
-          return _buildPlatformCard(p['name']!, p['icon']!, p['color']!, accounts);
+          final name = p['name']! as String;
+          final icon = p['icon']! as String;
+          final color = p['color']! as Color;
+          final accounts = _getAccounts(name);
+          return _buildPlatformCard(name, icon, color, accounts);
         },
       ),
     );
